@@ -95,8 +95,8 @@ static int p8_call(CELESTE_P8_CALLBACK_TYPE calltype, ...)
   switch (calltype) {
     case CELESTE_P8_SPR: {
       int tile = INT_ARG();
-      int x = INT_ARG();
-      int y = INT_ARG();
+      int x = INT_ARG() - camera_x;
+      int y = INT_ARG() - camera_y;
       int w = INT_ARG();
       int h = INT_ARG();
       int flip_x = INT_ARG();
@@ -170,6 +170,12 @@ static int p8_call(CELESTE_P8_CALLBACK_TYPE calltype, ...)
       break;
     }
 
+    case CELESTE_P8_CAMERA: {
+      camera_x = INT_ARG();
+      camera_y = INT_ARG();
+      break;
+    }
+
     case CELESTE_P8_FGET: {
       int tile = INT_ARG();
       int flag = INT_ARG();
@@ -180,8 +186,8 @@ static int p8_call(CELESTE_P8_CALLBACK_TYPE calltype, ...)
     case CELESTE_P8_MAP: {
       int celx = INT_ARG();
       int cely = INT_ARG();
-      int sx = INT_ARG();
-      int sy = INT_ARG();
+      int sx = INT_ARG() - camera_x;
+      int sy = INT_ARG() - camera_y;
       int celw = INT_ARG();
       int celh = INT_ARG();
       int layer = INT_ARG();
