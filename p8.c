@@ -30,6 +30,7 @@ void p8_update(unsigned buttons)
 
 #include "ccleste/tilemap.h"
 #include "res/p8_font.h"
+#include "res/p8_gfx.h"
 
 static int camera_x, camera_y;
 
@@ -61,6 +62,14 @@ static inline void pix(int x, int y, int col)
     fb[y][x][2] = pal[col][2];
     fb[y][x][3] = 0xff;
   }
+}
+
+static inline void spr(int cx, int cy, int sx, int sy)
+{
+  for (int y = 0; y < 8; y++) if (sy + y >= 0 && sy + y < 128)
+    for (int x = 0; x < 8; x++) {
+      pix(sx + x, sy + y, (p8_gfx[cy][cx][y] >> (4 * x)) & 0xf);
+    }
 }
 
 static int p8_call(CELESTE_P8_CALLBACK_TYPE calltype, ...)
@@ -128,6 +137,19 @@ static int p8_call(CELESTE_P8_CALLBACK_TYPE calltype, ...)
 
     case CELESTE_P8_MAP: {
       // TODO
+      int celx = INT_ARG();
+      int cely = INT_ARG();
+      int sx = INT_ARG();
+      int sy = INT_ARG();
+      int celw = INT_ARG();
+      int celh = INT_ARG();
+      int layer = INT_ARG();
+      for (int cy = 0; cy < celh; cy++)
+      for (int cx = 0; cx < celw; cx++) {
+        int tile = tilemap_data[(cely + cy) * 128 + (celx + cx)];
+        if ((tile_flags[tile] & layer) == layer)
+          spr(tile % 16, tile / 16, sx + cx * 8, sy + cy * 8);
+      }
       break;
     }
 
