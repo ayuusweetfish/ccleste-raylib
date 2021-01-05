@@ -13,7 +13,6 @@ static unsigned cur_buttons;
 
 void *p8_draw()
 {
-  memset(fb, 0, sizeof fb);
   Celeste_P8_draw();
   return (void *)&fb[0][0][0];
 }
