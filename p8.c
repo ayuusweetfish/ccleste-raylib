@@ -68,7 +68,17 @@ static inline void spr(int cx, int cy, int sx, int sy)
 {
   for (int y = 0; y < 8; y++) if (sy + y >= 0 && sy + y < 128)
     for (int x = 0; x < 8; x++) {
-      pix(sx + x, sy + y, (p8_gfx[cy][cx][y] >> (4 * x)) & 0xf);
+      uint8_t col = (p8_gfx[cy][cx][y] >> (4 * x)) & 0xf;
+      if (col != 0) pix(sx + x, sy + y, col);
+    }
+}
+
+static inline void spr_flippable(int cx, int cy, int sx, int sy, int fx, int fy)
+{
+  for (int y = 0; y < 8; y++) if (sy + y >= 0 && sy + y < 128)
+    for (int x = 0; x < 8; x++) {
+      uint8_t col = (p8_gfx[cy][cx][fy ? (7 - y) : y] >> (4 * (fx ? (7 - x) : x))) & 0xf;
+      if (col != 0) pix(sx + x, sy + y, col);
     }
 }
 
@@ -83,8 +93,33 @@ static int p8_call(CELESTE_P8_CALLBACK_TYPE calltype, ...)
   int ret = 0;
 
   switch (calltype) {
+    case CELESTE_P8_SPR: {
+      int tile = INT_ARG();
+      int x = INT_ARG();
+      int y = INT_ARG();
+      int w = INT_ARG();
+      int h = INT_ARG();
+      int flip_x = INT_ARG();
+      int flip_y = INT_ARG();
+      if (w != 1 || h != 1) {
+        puts("unsupported");
+        break;
+      }
+      if (!flip_x && !flip_y)
+        spr(tile % 16, tile / 16, x, y);
+      else
+        spr_flippable(tile % 16, tile / 16, x, y, flip_x, flip_y);
+    }
+
     case CELESTE_P8_BTN: {
       return !!(cur_buttons & (1u << INT_ARG()));
+      break;
+    }
+
+    case CELESTE_P8_PAL: {
+      int c0 = INT_ARG();
+      int c1 = INT_ARG();
+      memcpy(pal[c0], pal_default[c1], sizeof pal[c0]);
       break;
     }
 
@@ -135,8 +170,14 @@ static int p8_call(CELESTE_P8_CALLBACK_TYPE calltype, ...)
       break;
     }
 
+    case CELESTE_P8_FGET: {
+      int tile = INT_ARG();
+      int flag = INT_ARG();
+      ret = !!(tile_flags[tile] & (1 << flag));
+      break;
+    }
+
     case CELESTE_P8_MAP: {
-      // TODO
       int celx = INT_ARG();
       int cely = INT_ARG();
       int sx = INT_ARG();

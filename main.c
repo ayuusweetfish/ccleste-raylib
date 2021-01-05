@@ -27,14 +27,14 @@ int main()
     ClearBackground(BLACK);
 
     unsigned buttons = 0;
-    if (IsKeyPressed(KEY_LEFT))   buttons |= P8_BTN_L;
-    if (IsKeyPressed(KEY_RIGHT))  buttons |= P8_BTN_R;
-    if (IsKeyPressed(KEY_UP))     buttons |= P8_BTN_U;
-    if (IsKeyPressed(KEY_DOWN))   buttons |= P8_BTN_D;
-    if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_C) ||
-        IsKeyPressed(KEY_N))      buttons |= P8_BTN_O;
-    if (IsKeyPressed(KEY_X) || IsKeyPressed(KEY_V) ||
-        IsKeyPressed(KEY_M))      buttons |= P8_BTN_X;
+    if (IsKeyDown(KEY_LEFT))  buttons |= P8_BTN_L;
+    if (IsKeyDown(KEY_RIGHT)) buttons |= P8_BTN_R;
+    if (IsKeyDown(KEY_UP))    buttons |= P8_BTN_U;
+    if (IsKeyDown(KEY_DOWN))  buttons |= P8_BTN_D;
+    if (IsKeyDown(KEY_Z) || IsKeyDown(KEY_C) ||
+        IsKeyDown(KEY_N))     buttons |= P8_BTN_O;
+    if (IsKeyDown(KEY_X) || IsKeyDown(KEY_V) ||
+        IsKeyDown(KEY_M))     buttons |= P8_BTN_X;
     p8_update(buttons);
 
     // Update and draw texture
