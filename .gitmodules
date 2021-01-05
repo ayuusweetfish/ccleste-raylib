@@ -1,0 +1,6 @@
+[submodule "ccleste"]
+	path = ccleste
+	url = https://github.com/lemon-sherbet/ccleste.git
+[submodule "raylib"]
+	path = raylib
+	url = https://github.com/raysan5/raylib.git
