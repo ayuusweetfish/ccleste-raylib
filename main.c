@@ -1,7 +1,7 @@
 #include "p8.h"
 #include "raylib.h"
 
-#define WIN_SIZE  256
+#define WIN_SIZE  512
 
 int main()
 {
@@ -18,6 +18,9 @@ int main()
     .mipmaps = 1,
     .format = UNCOMPRESSED_R8G8B8A8
   });
+  free(data);
+
+  p8_init();
 
   while (!WindowShouldClose()) {
     BeginDrawing();

@@ -3,6 +3,7 @@
 
 #define P8_SCR_SIZE 128
 
+void p8_init();
 void p8_update();
 void *p8_draw();
 
