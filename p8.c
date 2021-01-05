@@ -82,6 +82,13 @@ static inline void spr_flippable(int cx, int cy, int sx, int sy, int fx, int fy)
     }
 }
 
+static inline void fillrect(int x0, int y0, int x1, int y1, int col)
+{
+  for (int y = y0; y <= y1; y++)
+    for (int x = x0; x <= x1; x++)
+      pix(x, y, col);
+}
+
 static int p8_call(CELESTE_P8_CALLBACK_TYPE calltype, ...)
 {
   va_list args;
@@ -102,7 +109,7 @@ static int p8_call(CELESTE_P8_CALLBACK_TYPE calltype, ...)
       int flip_x = INT_ARG();
       int flip_y = INT_ARG();
       if (w != 1 || h != 1) {
-        puts("unsupported");
+        puts("unsupported sprite scale");
         break;
       }
       if (!flip_x && !flip_y)
@@ -125,6 +132,29 @@ static int p8_call(CELESTE_P8_CALLBACK_TYPE calltype, ...)
 
     case CELESTE_P8_PAL_RESET: {
       memcpy(pal, pal_default, sizeof pal);
+      break;
+    }
+
+    case CELESTE_P8_CIRCFILL: {
+      int x = INT_ARG() - camera_x;
+      int y = INT_ARG() - camera_y;
+      int r = INT_ARG();
+      int col = INT_ARG();
+      if (r > 3) {
+        puts("unsupported radius");
+      }
+      // TODO: Replace with pixel-by-pixel calculations
+      if (r == 1) {
+        fillrect(x - 1, y, x + 1, y, col);
+        fillrect(x, y - 1, x, y + 1, col);
+      } else if (r == 2) {
+        fillrect(x - 2, y - 1, x + 2, y + 1, col);
+        fillrect(x - 1, y - 2, x + 1, y + 2, col);
+      } else if (r == 3) {
+        fillrect(x - 3, y - 1, x + 3, y + 1, col);
+        fillrect(x - 2, y - 2, x + 2, y + 2, col);
+        fillrect(x - 1, y - 3, x + 1, y + 3, col);
+      }
       break;
     }
 
@@ -157,9 +187,7 @@ static int p8_call(CELESTE_P8_CALLBACK_TYPE calltype, ...)
       int x1 = INT_ARG() - camera_x;
       int y1 = INT_ARG() - camera_y;
       int col = INT_ARG();
-      for (int y = y0; y <= y1; y++)
-        for (int x = x0; x <= x1; x++)
-          pix(x, y, col);
+      fillrect(x0, y0, x1, y1, col);
       break;
     }
 
