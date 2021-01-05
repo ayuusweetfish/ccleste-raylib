@@ -9,6 +9,7 @@
 #include <string.h>
 
 static uint8_t fb[P8_SCR_SIZE][P8_SCR_SIZE][4];
+static unsigned cur_buttons;
 
 void *p8_draw()
 {
@@ -18,9 +19,10 @@ void *p8_draw()
   return (void *)&fb[0][0][0];
 }
 
-void p8_update()
+void p8_update(unsigned buttons)
 {
   puts("update");
+  cur_buttons = buttons;
   Celeste_P8_update();
 }
 
@@ -73,8 +75,7 @@ static int p8_call(CELESTE_P8_CALLBACK_TYPE calltype, ...)
 
   switch (calltype) {
     case CELESTE_P8_BTN: {
-      // TODO
-      return 0;
+      return !!(cur_buttons & (1u << INT_ARG()));
       break;
     }
 

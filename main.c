@@ -26,7 +26,16 @@ int main()
     BeginDrawing();
     ClearBackground(BLACK);
 
-    p8_update();
+    unsigned buttons = 0;
+    if (IsKeyPressed(KEY_LEFT))   buttons |= P8_BTN_L;
+    if (IsKeyPressed(KEY_RIGHT))  buttons |= P8_BTN_R;
+    if (IsKeyPressed(KEY_UP))     buttons |= P8_BTN_U;
+    if (IsKeyPressed(KEY_DOWN))   buttons |= P8_BTN_D;
+    if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_C) ||
+        IsKeyPressed(KEY_N))      buttons |= P8_BTN_O;
+    if (IsKeyPressed(KEY_X) || IsKeyPressed(KEY_V) ||
+        IsKeyPressed(KEY_M))      buttons |= P8_BTN_X;
+    p8_update(buttons);
 
     // Update and draw texture
     UpdateTexture(tex, p8_draw());
