@@ -1,6 +1,6 @@
 LD = $(CC)
 
-CFLAGS += -Iraylib/src
+CFLAGS += -Iraylib/src -g
 
 # macOS
 LDEXTRAFLAGS = raylib/src/libraylib.a -framework OpenGL -framework OpenAL -framework IOKit -framework CoreVideo -framework Cocoa
