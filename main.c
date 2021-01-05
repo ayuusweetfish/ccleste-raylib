@@ -6,7 +6,7 @@
 int main()
 {
   InitWindow(WIN_SIZE, WIN_SIZE, "Window");
-  SetTargetFPS(60);
+  SetTargetFPS(30);
 
   // Create empty texture by loading empty texture data,
   // as raylib does not provide a more convenient API
