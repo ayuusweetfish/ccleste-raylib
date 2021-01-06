@@ -28,6 +28,8 @@ void p8_update(unsigned buttons)
 #include "ccleste/tilemap.h"
 #include "res/p8_font.h"
 #include "res/p8_gfx.h"
+#include "res/p8_sfx_defs.h"
+#include "res/p8_sfx.h"
 
 static int camera_x, camera_y;
 
@@ -117,6 +119,12 @@ static int p8_call(CELESTE_P8_CALLBACK_TYPE calltype, ...)
 
     case CELESTE_P8_BTN: {
       return !!(cur_buttons & (1u << INT_ARG()));
+      break;
+    }
+
+    case CELESTE_P8_SFX: {
+      int id = INT_ARG();
+      printf("%d\n", (int)p8_sfx[id].spd);
       break;
     }
 
