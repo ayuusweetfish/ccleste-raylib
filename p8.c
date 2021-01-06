@@ -106,12 +106,53 @@ static inline float freq(unsigned pitch)
 
 typedef float (*osc_t)(float);
 
-static float osc_tri(float x) { return 1 - 2 * fabsf(x - 0.5f); }
-static float osc_saw(float x) { return x; }
+// PRNG
+static uint32_t seed = 0x20210106;
+static inline float my_rand()
+{
+  uint32_t i = 0;
+  seed = seed * 1103515245 + 12345;
+  i = (seed & 0x7fff0000);
+  seed = seed * 1103515245 + 12345;
+  i = (i >> 2) | ((seed >> 16) & 0x7fff);
+  return ((float)i / ((1 << 30) - 1) * 2) - 1;
+}
+
+// Implementations by picolove
+// Actual PICO-8 implementations are more detailed
+#define frac(x) ((x) - (int)(x))
+static float osc_tri(float x) { return (2 * fabsf(2 * frac(x) - 1) - 1) * 0.7f; }
+static float osc_tsaw(float x) {
+  x = frac(x);
+  return (((x < 0.875f) ? (x * 16 / 7) : ((x - 1) * 16)) - 1) * 0.7f;
+}
+static float osc_saw(float x) { return (frac(x) - 0.5f) * 0.9f; }
+static float osc_sqr(float x) { return (frac(x) < 0.5000f) ? 1.0f/3 : -1.0f/3; }
+static float osc_pulse(float x) { return (frac(x) < 0.3125f) ? 1.0f/3 : -1.0f/3; }
+static float osc_organ(float x) {
+  float y = fmodf(x * 4, 2);
+  float z = fmodf(x * 8, 2);
+  return (fabsf(y-1)-0.5 + (fabsf(z-1)-0.5)/2-0.1) * 0.7;
+}
+static float osc_noise(float x) {
+  const float tscale = 0.11288053831187f;
+  static float lastx = 0;
+  static float smp0 = 0, smp1 = 0;
+  float scale = (x - lastx) / tscale;
+  smp0 = smp1;
+  smp1 = (smp0 + scale * my_rand()) / (1 + scale);
+  lastx = x;
+  return fminf(fmaxf((smp0+smp1)*4/3*(1.75f-scale), -1), 1) * 0.7f;
+}
+static float osc_phaser(float x) {
+  float y = fmodf(x * 2, 2);
+  float z = fmodf(x * (127.0f/128), 2);
+  return (fabsf(y-1)-0.5f + (fabsf(z-1)-0.5f)/2) - 1.0f/4;
+}
 
 static const osc_t osc[8] = {
-  osc_tri, osc_tri, osc_saw, osc_tri,
-  osc_tri, osc_tri, osc_tri, osc_tri,
+  osc_tri, osc_tsaw, osc_saw, osc_sqr,
+  osc_pulse, osc_organ, osc_noise, osc_phaser,
 };
 
 // 22050 Hz 16-bit mono
@@ -128,8 +169,8 @@ void p8_audio(unsigned samples, int16_t *pcm)
       // Oscillator
       float f = freq(snd->notes[note].pitch);
       float x = ((float)phase / 22050) * f;
-      x -= (int)x;
       float value = osc[snd->notes[note].wform](x);
+      value *= (float)snd->notes[note].vol / 7;
       pcm[i] += (int16_t)roundf(value * 8191.5f);
 
       // Update
@@ -189,6 +230,7 @@ static int p8_call(CELESTE_P8_CALLBACK_TYPE calltype, ...)
 
     case CELESTE_P8_SFX: {
       int id = INT_ARG();
+      printf("%d\n", id);
       int ch = 0; // TODO: Find an appropriate channel
       channels[ch].snd_id = id;
       channels[ch].note = 0;
