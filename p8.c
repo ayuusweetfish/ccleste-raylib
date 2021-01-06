@@ -128,7 +128,7 @@ static inline float my_rand()
 static float osc_tri(float x) { return (2 * fabsf(2 * frac(x + 0.25f) - 1) - 1) * 0.7f; }
 static float osc_tsaw(float x) {
   x = frac(x);
-  return (((x < 0.875f) ? (x * 16 / 7) : ((x - 1) * 16)) - 1) * 0.7f;
+  return (((x < 0.875f) ? (x * 16 / 7) : ((1 - x) * 16)) - 1) * 0.7f;
 }
 static float osc_saw(float x) { return (frac(x) - 0.5f) * 0.9f; }
 static float osc_sqr(float x) { return (frac(x) < 0.5000f) ? 1.0f/3 : -1.0f/3; }
