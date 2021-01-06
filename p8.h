@@ -1,6 +1,8 @@
 #ifndef CELESTE_RAYLIB_P8_H
 #define CELESTE_RAYLIB_P8_H
 
+#include <stdint.h>
+
 #define P8_SCR_SIZE 128
 
 #define P8_BTN_L  (1u << 0)
@@ -13,5 +15,6 @@
 void p8_init();
 void p8_update(unsigned buttons);
 void *p8_draw();
+void p8_audio(unsigned samples, int16_t *pcm);
 
 #endif

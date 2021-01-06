@@ -1,7 +1,10 @@
 #include "p8.h"
 #include "raylib.h"
+#include <stdlib.h>
 
 #define WIN_SIZE  512
+
+#define AUDIO_BLOCK_SIZE  1024
 
 int main()
 {
@@ -22,6 +25,12 @@ int main()
 
   p8_init();
 
+  InitAudioDevice();
+  SetAudioStreamBufferSizeDefault(AUDIO_BLOCK_SIZE);
+  AudioStream astr = InitAudioStream(22050, 16, 1);
+  PlayAudioStream(astr);
+  int16_t *pcm = (int16_t *)malloc(AUDIO_BLOCK_SIZE * 2);
+
   while (!WindowShouldClose()) {
     bool step = (!IsKeyDown(KEY_SPACE) || IsKeyPressed(KEY_ENTER));
     BeginDrawing();
@@ -40,6 +49,11 @@ int main()
       p8_update(buttons);
 
       UpdateTexture(tex, p8_draw());
+
+      if (IsAudioStreamProcessed(astr)) {
+        p8_audio(AUDIO_BLOCK_SIZE, pcm);
+        UpdateAudioStream(astr, pcm, AUDIO_BLOCK_SIZE);
+      }
     }
 
     DrawTextureEx(tex, (Vector2) {0, 0}, 0,

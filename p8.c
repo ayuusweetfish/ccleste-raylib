@@ -3,8 +3,8 @@
 #include <stddef.h>
 #include "ccleste/celeste.h"
 
+#include <math.h>
 #include <stdarg.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -30,6 +30,8 @@ void p8_update(unsigned buttons)
 #include "res/p8_gfx.h"
 #include "res/p8_sfx_defs.h"
 #include "res/p8_sfx.h"
+
+// Graphics
 
 static int camera_x, camera_y;
 
@@ -88,6 +90,69 @@ static inline void fillrect(int x0, int y0, int x1, int y1, int col)
       pix(x, y, col);
 }
 
+// Audio
+
+static struct {
+  unsigned snd_id;
+  unsigned note;
+  unsigned phase; // number of samples since current note started
+} channels[4];
+
+// A3 (33) = 440 Hz
+static inline float freq(unsigned pitch)
+{
+  return 440.0f * powf(2.0f, (float)((int)pitch - 33) / 12.0f);
+}
+
+typedef float (*osc_t)(float);
+
+static float osc_tri(float x) { return 1 - 2 * fabsf(x - 0.5f); }
+static float osc_saw(float x) { return x; }
+
+static const osc_t osc[8] = {
+  osc_tri, osc_tri, osc_saw, osc_tri,
+  osc_tri, osc_tri, osc_tri, osc_tri,
+};
+
+// 22050 Hz 16-bit mono
+void p8_audio(unsigned samples, int16_t *pcm)
+{
+  for (unsigned i = 0; i < samples; i++) pcm[i] = 0;
+  for (int ch = 0; ch < 4; ch++) {
+    unsigned snd_id = channels[ch].snd_id;
+    if (snd_id == 0xff) continue;
+    unsigned note = channels[ch].note;
+    unsigned phase = channels[ch].phase;
+    const p8_snd *snd = &p8_sfx[snd_id];
+    for (unsigned i = 0; i < samples; i++) {
+      // Oscillator
+      float f = freq(snd->notes[note].pitch);
+      float x = ((float)phase / 22050) * f;
+      x -= (int)x;
+      float value = osc[snd->notes[note].wform](x);
+      pcm[i] += (int16_t)roundf(value * 8191.5f);
+
+      // Update
+      phase++;
+      if (phase >= 183 * snd->spd) {
+        note++;
+        if (snd->lpstart < snd->lpend) {
+          if (note >= snd->lpend) note = snd->lpstart;
+        } else if (note >= 32) {
+          snd_id = 0xff;
+          break;
+        }
+        phase = 0;
+      }
+    }
+    channels[ch].snd_id = snd_id;
+    channels[ch].note = note;
+    channels[ch].phase = phase;
+  }
+}
+
+// Interface
+
 static int p8_call(CELESTE_P8_CALLBACK_TYPE calltype, ...)
 {
   va_list args;
@@ -124,7 +189,10 @@ static int p8_call(CELESTE_P8_CALLBACK_TYPE calltype, ...)
 
     case CELESTE_P8_SFX: {
       int id = INT_ARG();
-      printf("%d\n", (int)p8_sfx[id].spd);
+      int ch = 0; // TODO: Find an appropriate channel
+      channels[ch].snd_id = id;
+      channels[ch].note = 0;
+      channels[ch].phase = 0;
       break;
     }
 
@@ -258,6 +326,7 @@ static int p8_call(CELESTE_P8_CALLBACK_TYPE calltype, ...)
 void p8_init()
 {
   camera_x = camera_y = 0;
+  for (int i = 0; i < 4; i++) channels[i].snd_id = 0xff;
 
   Celeste_P8_set_call_func(p8_call);
   Celeste_P8_set_rndseed(20210115);
