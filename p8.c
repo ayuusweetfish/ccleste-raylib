@@ -94,7 +94,7 @@ static inline void fillrect(int x0, int y0, int x1, int y1, int col)
 
 static struct {
   unsigned snd_id;
-  unsigned note;
+  unsigned note_id;
   unsigned samples;
   float phase;
 } channels[4];
@@ -159,6 +159,8 @@ static const osc_t osc[8] = {
   osc_pulse, osc_organ, osc_noise, osc_phaser,
 };
 
+#define lerp(a, b, r) ((a) + ((b) - (a)) * (r))
+
 // 22050 Hz 16-bit mono
 void p8_audio(unsigned block_samples, int16_t *pcm)
 {
@@ -166,36 +168,54 @@ void p8_audio(unsigned block_samples, int16_t *pcm)
   for (int ch = 0; ch < 4; ch++) {
     unsigned snd_id = channels[ch].snd_id;
     if (snd_id == 0xff) continue;
-    unsigned note = channels[ch].note;
+    unsigned note_id = channels[ch].note_id;
     unsigned samples = channels[ch].samples;
     float phase = channels[ch].phase;
     const p8_snd *snd = &p8_sfx[snd_id];
     for (unsigned i = 0; i < block_samples; i++) {
-      float f = freq(snd->notes[note].pitch);
-      if (snd->notes[note].vol != 0) {
+      const p8_note *note = &snd->notes[note_id];
+      float f0 = freq(note->pitch);
+      #define rate ((float)samples / (183 * snd->spd))
+
+      if (note->vol != 0) {
+        float f = f0;
+        if (note->eff == 1) {
+          // Effect 1: Slide
+          // Caveat: does not handle loops
+          unsigned last_pitch = (note_id == 0 ? 24 : (note - 1)->pitch);
+          f = freq(lerp((float)last_pitch, (float)note->pitch, rate));
+        } else if (note->eff == 2) {
+          // Effect 2: Vibrato
+        } else if (note->eff == 3) {
+          // Effect 3: Drop
+          f = freq(note->pitch * (1 - rate));
+        }
         // Oscillator
         float x = phase + (float)samples / 22050 * f;
-        float value = osc[snd->notes[note].wform](x);
-        value *= (float)snd->notes[note].vol / 7;
+        float value = osc[note->wform](x);
+        value *= (float)note->vol / 7;
+        // Effects 4, 5: Fade in/out
+        if (note->eff == 4) value *= rate;
+        if (note->eff == 5) value *= (1 - rate);
         pcm[i] += (int16_t)roundf(value * 8191.5f);
       }
 
       // Update
       samples++;
       if (samples == 183 * snd->spd) {
-        phase += (float)samples / 22050 * f;
+        phase += (float)samples / 22050 * f0;
         samples = 0;
-        note++;
-        if (snd->lpstart < snd->lpend && note >= snd->lpend) {
-          note = snd->lpstart;
-        } else if (note >= 32) {
+        note_id++;
+        if (snd->lpstart < snd->lpend && note_id >= snd->lpend) {
+          note_id = snd->lpstart;
+        } else if (note_id >= 32) {
           snd_id = 0xff;
           break;
         }
       }
     }
     channels[ch].snd_id = snd_id;
-    channels[ch].note = note;
+    channels[ch].note_id = note_id;
     channels[ch].samples = samples;
     channels[ch].phase = phase;
   }
@@ -245,7 +265,7 @@ static int p8_call(CELESTE_P8_CALLBACK_TYPE calltype, ...)
         last_sfx_ch = (last_sfx_ch + 1) % 4;
       } while (music_mask & (1 << last_sfx_ch));
       channels[last_sfx_ch].snd_id = id;
-      channels[last_sfx_ch].note = 0;
+      channels[last_sfx_ch].note_id = 0;
       channels[last_sfx_ch].samples = 0;
       channels[last_sfx_ch].phase = 0;
       break;
