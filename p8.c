@@ -95,7 +95,8 @@ static inline void fillrect(int x0, int y0, int x1, int y1, int col)
 static struct {
   unsigned snd_id;
   unsigned note;
-  unsigned phase; // number of samples since current note started
+  unsigned samples;
+  float phase;
 } channels[4];
 
 // A3 (33) = 440 Hz
@@ -114,14 +115,14 @@ static inline float my_rand()
   seed = seed * 1103515245 + 12345;
   i = (seed & 0x7fff0000);
   seed = seed * 1103515245 + 12345;
-  i = (i >> 2) | ((seed >> 16) & 0x7fff);
-  return ((float)i / ((1 << 30) - 1) * 2) - 1;
+  i = (i >> 1) | ((seed >> 16) & 0x7fff);
+  return ((float)i / 0x3fffffff * 2) - 1;
 }
 
 // Implementations by picolove
 // Actual PICO-8 implementations are more detailed
 #define frac(x) ((x) - (int)(x))
-static float osc_tri(float x) { return (2 * fabsf(2 * frac(x) - 1) - 1) * 0.7f; }
+static float osc_tri(float x) { return (2 * fabsf(2 * frac(x + 0.25f) - 1) - 1) * 0.7f; }
 static float osc_tsaw(float x) {
   x = frac(x);
   return (((x < 0.875f) ? (x * 16 / 7) : ((x - 1) * 16)) - 1) * 0.7f;
@@ -131,7 +132,7 @@ static float osc_sqr(float x) { return (frac(x) < 0.5000f) ? 1.0f/3 : -1.0f/3; }
 static float osc_pulse(float x) { return (frac(x) < 0.3125f) ? 1.0f/3 : -1.0f/3; }
 static float osc_organ(float x) {
   float y = fmodf(x * 4, 2);
-  float z = fmodf(x * 8, 2);
+  float z = fmodf(x * 2, 2);
   return (fabsf(y-1)-0.5 + (fabsf(z-1)-0.5)/2-0.1) * 0.7;
 }
 static float osc_noise(float x) {
@@ -146,7 +147,7 @@ static float osc_noise(float x) {
 }
 static float osc_phaser(float x) {
   float y = fmodf(x * 2, 2);
-  float z = fmodf(x * (127.0f/128), 2);
+  float z = fmodf(x * (127.0f/64), 2);
   return (fabsf(y-1)-0.5f + (fabsf(z-1)-0.5f)/2) - 1.0f/4;
 }
 
@@ -156,38 +157,43 @@ static const osc_t osc[8] = {
 };
 
 // 22050 Hz 16-bit mono
-void p8_audio(unsigned samples, int16_t *pcm)
+void p8_audio(unsigned block_samples, int16_t *pcm)
 {
-  for (unsigned i = 0; i < samples; i++) pcm[i] = 0;
+  for (unsigned i = 0; i < block_samples; i++) pcm[i] = 0;
   for (int ch = 0; ch < 4; ch++) {
     unsigned snd_id = channels[ch].snd_id;
     if (snd_id == 0xff) continue;
     unsigned note = channels[ch].note;
-    unsigned phase = channels[ch].phase;
+    unsigned samples = channels[ch].samples;
+    float phase = channels[ch].phase;
     const p8_snd *snd = &p8_sfx[snd_id];
-    for (unsigned i = 0; i < samples; i++) {
-      // Oscillator
+    for (unsigned i = 0; i < block_samples; i++) {
       float f = freq(snd->notes[note].pitch);
-      float x = ((float)phase / 22050) * f;
-      float value = osc[snd->notes[note].wform](x);
-      value *= (float)snd->notes[note].vol / 7;
-      pcm[i] += (int16_t)roundf(value * 8191.5f);
+      if (snd->notes[note].vol != 0) {
+        // Oscillator
+        float x = phase + (float)samples / 22050 * f;
+        float value = osc[snd->notes[note].wform](x);
+        value *= (float)snd->notes[note].vol / 7;
+        pcm[i] += (int16_t)roundf(value * 8191.5f);
+      }
 
       // Update
-      phase++;
-      if (phase >= 183 * snd->spd) {
+      samples++;
+      if (samples == 183 * snd->spd) {
+        phase += (float)samples / 22050 * f;
+        samples = 0;
         note++;
-        if (snd->lpstart < snd->lpend) {
-          if (note >= snd->lpend) note = snd->lpstart;
+        if (snd->lpstart < snd->lpend && note >= snd->lpend) {
+          note = snd->lpstart;
         } else if (note >= 32) {
           snd_id = 0xff;
           break;
         }
-        phase = 0;
       }
     }
     channels[ch].snd_id = snd_id;
     channels[ch].note = note;
+    channels[ch].samples = samples;
     channels[ch].phase = phase;
   }
 }
@@ -234,6 +240,7 @@ static int p8_call(CELESTE_P8_CALLBACK_TYPE calltype, ...)
       int ch = 0; // TODO: Find an appropriate channel
       channels[ch].snd_id = id;
       channels[ch].note = 0;
+      channels[ch].samples = 0;
       channels[ch].phase = 0;
       break;
     }
