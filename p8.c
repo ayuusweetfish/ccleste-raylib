@@ -104,6 +104,9 @@ static unsigned music_pattern;
 static unsigned music_mask;
 static int last_sfx_ch;
 
+static int music_fade_dur, music_fade_cur;
+static bool music_is_fade_out;
+
 // With the end of the sound on which channel
 // ends the current pattern
 // Rule:
@@ -111,8 +114,14 @@ static int last_sfx_ch;
 // - If all looping channels: the slowest channel
 static unsigned music_end_ch;
 
-static inline void play_pattern(int n)
+static inline void play_pattern(int n, int fadems)
 {
+  if (fadems > 0) {
+    music_fade_dur = fadems * 22050 / 1000;
+    music_fade_cur = 0;
+    music_is_fade_out = (n == -1);
+    if (music_is_fade_out) return;
+  }
   if (music_pattern != 0xff) {
     for (int ch = 0; ch < 4; ch++)
       if (p8_mus[music_pattern][ch + 1] < 64)
@@ -250,6 +259,12 @@ void p8_audio(unsigned block_samples, int16_t *pcm)
         // Effects 4, 5: Fade in/out
         if (note->eff == 4) value *= rate;
         if (note->eff == 5) value *= (1 - rate);
+        // Is music fading?
+        if (c < 4 && music_fade_dur > 0) {
+          float r = fminf(1.0f, (float)(music_fade_cur + i) / music_fade_dur);
+          if (music_is_fade_out) r = 1 - r;
+          value *= r;
+        }
         pcm[i] += (int16_t)roundf(value * 8191.5f);
       }
 
@@ -280,19 +295,24 @@ void p8_audio(unsigned block_samples, int16_t *pcm)
     channels[ch].phase = phase;
   }
 
+  if ((music_fade_cur += block_samples) >= music_fade_dur) {
+    music_fade_dur = 0;
+    if (music_is_fade_out) play_pattern(-1, 0);
+  }
+
   if (music_end != 0) {
     // Move to the next pattern
     if (p8_mus[music_pattern][0] & 4) {
       // STOP command
-      play_pattern(-1);
+      play_pattern(-1, 0);
     } else if (p8_mus[music_pattern][0] & 2) {
       // LOOP BACK command
       unsigned loop_start = music_pattern;
       while (loop_start > 0 && !(p8_mus[loop_start][0] & 1))
         loop_start--;
-      play_pattern(loop_start);
+      play_pattern(loop_start, 0);
     } else {
-      play_pattern(music_pattern + 1);
+      play_pattern(music_pattern + 1, 0);
     }
     // Re-generate audio
     p8_audio(block_samples - music_end, pcm + music_end);
@@ -317,7 +337,7 @@ static int p8_call(CELESTE_P8_CALLBACK_TYPE calltype, ...)
       int fadems = INT_ARG();
       int mask = INT_ARG();
       music_mask = mask;
-      play_pattern(n);
+      play_pattern(n, fadems);
       break;
     }
 
@@ -491,6 +511,7 @@ void p8_init()
   music_pattern = 0xff;
   music_mask = 0;
   last_sfx_ch = 3;
+  music_fade_dur = 0;
   for (int i = 0; i < 4; i++) channels[i].snd_id = 0xff;
 
   Celeste_P8_set_call_func(p8_call);
