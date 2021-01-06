@@ -5,6 +5,7 @@
 
 #include <math.h>
 #include <stdarg.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -103,21 +104,43 @@ static unsigned music_pattern;
 static unsigned music_mask;
 static int last_sfx_ch;
 
+// With the end of the sound on which channel
+// ends the current pattern
+// Rule:
+// - If at least one non-looping channel: the leftmost among such channels
+// - If all looping channels: the slowest channel
+static unsigned music_end_ch;
+
 static inline void play_pattern(int n)
 {
+  if (music_pattern != 0xff) {
+    for (int ch = 0; ch < 4; ch++)
+      if (p8_mus[music_pattern][ch + 1] < 64)
+        channels[ch].snd_id = 0xff;
+  }
   if (n == -1) {
     music_pattern = 0xff;
-    for (int ch = 0; ch < 4; ch++)
-      channels[ch].snd_id = 0xff;
   } else {
     music_pattern = n;
-    for (int ch = 0; ch < 4; ch++)
-      if (p8_mus[n][ch + 1] < 64) {
-        channels[ch].snd_id = p8_mus[n][ch + 1];
+    int max_spd = 0;
+    int best_ch = -1;
+    for (int ch = 0; ch < 4; ch++) {
+      unsigned snd_id = p8_mus[n][ch + 1];
+      if (snd_id < 64) {
+        channels[ch].snd_id = snd_id;
         channels[ch].note_id = 0;
         channels[ch].samples = 0;
         channels[ch].phase = 0;
+        int spd = (p8_sfx[snd_id].lpstart < p8_sfx[snd_id].lpend) ?
+          p8_sfx[snd_id].spd : 0xffff;
+        if (max_spd < spd) {
+          max_spd = spd;
+          best_ch = ch;
+        }
       }
+    }
+    music_end_ch = best_ch;
+    printf("%d\n", best_ch);
   }
 }
 
@@ -184,7 +207,18 @@ static const osc_t osc[8] = {
 void p8_audio(unsigned block_samples, int16_t *pcm)
 {
   for (unsigned i = 0; i < block_samples; i++) pcm[i] = 0;
-  for (int ch = 0; ch < 4; ch++) {
+  unsigned music_end = 0;
+  for (int c = 0; c < 8; c++) {
+    // 0...3: music; 4...7: non-music
+    // Since it is necessary to find the end of the music
+    // in order not to mess up sound effects in channels
+    // left to the channel that actually ends the music
+    // CELESTE Classic does not cover this case
+    // but the imeplementation is crafted anyway
+    int ch = c % 4;
+    if ((c < 4) ^ (music_pattern != 0xff && p8_mus[music_pattern][ch + 1] < 64))
+      continue;
+
     unsigned snd_id = channels[ch].snd_id;
     if (snd_id == 0xff) continue;
     unsigned note_id = channels[ch].note_id;
@@ -225,10 +259,17 @@ void p8_audio(unsigned block_samples, int16_t *pcm)
         phase += (float)samples / 22050 * f0;
         samples = 0;
         note_id++;
+        bool pattern_end = false;
         if (snd->lpstart < snd->lpend && note_id >= snd->lpend) {
           note_id = snd->lpstart;
+          pattern_end = true;
         } else if (note_id >= 32) {
           snd_id = 0xff;
+          pattern_end = true;
+        }
+        // Check music end
+        if (pattern_end && music_end_ch == ch) {
+          music_end = i + 1;
           break;
         }
       }
@@ -237,6 +278,24 @@ void p8_audio(unsigned block_samples, int16_t *pcm)
     channels[ch].note_id = note_id;
     channels[ch].samples = samples;
     channels[ch].phase = phase;
+  }
+
+  if (music_end != 0) {
+    // Move to the next pattern
+    if (p8_mus[music_pattern][0] & 4) {
+      // STOP command
+      play_pattern(-1);
+    } else if (p8_mus[music_pattern][0] & 2) {
+      // LOOP BACK command
+      unsigned loop_start = music_pattern;
+      while (loop_start > 0 && !(p8_mus[loop_start][0] & 1))
+        loop_start--;
+      play_pattern(loop_start);
+    } else {
+      play_pattern(music_pattern + 1);
+    }
+    // Re-generate audio
+    p8_audio(block_samples - music_end, pcm + music_end);
   }
 }
 
