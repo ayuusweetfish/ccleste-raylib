@@ -129,6 +129,7 @@ static inline void play_pattern(int n, int fadems)
   }
   if (n == -1) {
     music_pattern = 0xff;
+    music_mask = 0;
   } else {
     music_pattern = n;
     int max_spd = 0;
@@ -149,7 +150,6 @@ static inline void play_pattern(int n, int fadems)
       }
     }
     music_end_ch = best_ch;
-    printf("%d\n", best_ch);
   }
 }
 
@@ -283,7 +283,7 @@ void p8_audio(unsigned block_samples, int16_t *pcm)
           pattern_end = true;
         }
         // Check music end
-        if (pattern_end && music_end_ch == ch) {
+        if (c < 4 && pattern_end && music_end_ch == ch) {
           music_end = i + 1;
           break;
         }
@@ -295,14 +295,18 @@ void p8_audio(unsigned block_samples, int16_t *pcm)
     channels[ch].phase = phase;
   }
 
-  if ((music_fade_cur += block_samples) >= music_fade_dur) {
+  if (music_fade_dur > 0 &&
+      (music_fade_cur += (music_end == 0 ? block_samples : music_end))
+        >= music_fade_dur) {
     music_fade_dur = 0;
     if (music_is_fade_out) play_pattern(-1, 0);
   }
 
   if (music_end != 0) {
     // Move to the next pattern
-    if (p8_mus[music_pattern][0] & 4) {
+    if (music_pattern == 0xff) {
+      // Music may be stopped by fade-out, no-op here
+    } if (p8_mus[music_pattern][0] & 4) {
       // STOP command
       play_pattern(-1, 0);
     } else if (p8_mus[music_pattern][0] & 2) {
