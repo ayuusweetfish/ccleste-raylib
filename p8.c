@@ -99,6 +99,9 @@ static struct {
   float phase;
 } channels[4];
 
+static unsigned music_mask = 0;
+static int last_sfx_ch = 3;
+
 // A3 (33) = 440 Hz
 static inline float freq(unsigned pitch)
 {
@@ -237,11 +240,14 @@ static int p8_call(CELESTE_P8_CALLBACK_TYPE calltype, ...)
     case CELESTE_P8_SFX: {
       int id = INT_ARG();
       printf("%d\n", id);
-      int ch = 0; // TODO: Find an appropriate channel
-      channels[ch].snd_id = id;
-      channels[ch].note = 0;
-      channels[ch].samples = 0;
-      channels[ch].phase = 0;
+      // Find an appropriate channel
+      do {
+        last_sfx_ch = (last_sfx_ch + 1) % 4;
+      } while (music_mask & (1 << last_sfx_ch));
+      channels[last_sfx_ch].snd_id = id;
+      channels[last_sfx_ch].note = 0;
+      channels[last_sfx_ch].samples = 0;
+      channels[last_sfx_ch].phase = 0;
       break;
     }
 
