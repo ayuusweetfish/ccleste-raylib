@@ -23,25 +23,27 @@ int main()
   p8_init();
 
   while (!WindowShouldClose()) {
+    bool step = (!IsKeyDown(KEY_SPACE) || IsKeyPressed(KEY_ENTER));
     BeginDrawing();
     ClearBackground(BLACK);
 
-    unsigned buttons = 0;
-    if (IsKeyDown(KEY_LEFT))  buttons |= P8_BTN_L;
-    if (IsKeyDown(KEY_RIGHT)) buttons |= P8_BTN_R;
-    if (IsKeyDown(KEY_UP))    buttons |= P8_BTN_U;
-    if (IsKeyDown(KEY_DOWN))  buttons |= P8_BTN_D;
-    if (IsKeyDown(KEY_Z) || IsKeyDown(KEY_C) ||
-        IsKeyDown(KEY_N))     buttons |= P8_BTN_O;
-    if (IsKeyDown(KEY_X) || IsKeyDown(KEY_V) ||
-        IsKeyDown(KEY_M))     buttons |= P8_BTN_X;
-    p8_update(buttons);
+    if (step) {
+      unsigned buttons = 0;
+      if (IsKeyDown(KEY_LEFT))  buttons |= P8_BTN_L;
+      if (IsKeyDown(KEY_RIGHT)) buttons |= P8_BTN_R;
+      if (IsKeyDown(KEY_UP))    buttons |= P8_BTN_U;
+      if (IsKeyDown(KEY_DOWN))  buttons |= P8_BTN_D;
+      if (IsKeyDown(KEY_Z) || IsKeyDown(KEY_C) ||
+          IsKeyDown(KEY_N))     buttons |= P8_BTN_O;
+      if (IsKeyDown(KEY_X) || IsKeyDown(KEY_V) ||
+          IsKeyDown(KEY_M))     buttons |= P8_BTN_X;
+      p8_update(buttons);
 
-    // Update and draw texture
-    UpdateTexture(tex, p8_draw());
+      UpdateTexture(tex, p8_draw());
+    }
+
     DrawTextureEx(tex, (Vector2) {0, 0}, 0,
       (float)WIN_SIZE / P8_SCR_SIZE, WHITE);
-
     EndDrawing();
   }
 

@@ -188,6 +188,20 @@ static int p8_call(CELESTE_P8_CALLBACK_TYPE calltype, ...)
       break;
     }
 
+    case CELESTE_P8_LINE: {
+      int x0 = INT_ARG() - camera_x;
+      int y0 = INT_ARG() - camera_y;
+      int x1 = INT_ARG() - camera_x;
+      int y1 = INT_ARG() - camera_y;
+      int col = INT_ARG();
+      if (x0 != x1) {
+        puts("unsupported line");
+        break;
+      }
+      for (int y = y0; y <= y1; y++) pix(x0, y, col);
+      break;
+    }
+
     case CELESTE_P8_MGET: {
       int tx = INT_ARG();
       int ty = INT_ARG();
