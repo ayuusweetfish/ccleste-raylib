@@ -41,6 +41,17 @@ int main()
     if (i != 63) printf("  }, {\n");
     else printf("  }\n");
   }
+  printf("};\n\n");
+
+  // Music
+  printf("static const uint8_t p8_mus[64][5] = {\n");
+  for (int i = 0; i < 64; i++) {
+    printf("  { 0x%02x", getuint8());
+    getchar();  // Space
+    for (int j = 0; j < 4; j++) printf(", 0x%02x", getuint8());
+    printf(" },\n");
+    getchar();  // Newline
+  }
   printf("};\n");
 
   return 0;

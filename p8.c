@@ -99,8 +99,27 @@ static struct {
   float phase;
 } channels[4];
 
-static unsigned music_mask = 0;
-static int last_sfx_ch = 3;
+static unsigned music_pattern;
+static unsigned music_mask;
+static int last_sfx_ch;
+
+static inline void play_pattern(int n)
+{
+  if (n == -1) {
+    music_pattern = 0xff;
+    for (int ch = 0; ch < 4; ch++)
+      channels[ch].snd_id = 0xff;
+  } else {
+    music_pattern = n;
+    for (int ch = 0; ch < 4; ch++)
+      if (p8_mus[n][ch + 1] < 64) {
+        channels[ch].snd_id = p8_mus[n][ch + 1];
+        channels[ch].note_id = 0;
+        channels[ch].samples = 0;
+        channels[ch].phase = 0;
+      }
+  }
+}
 
 // A3 (33) = 440 Hz
 static inline float freq(unsigned pitch)
@@ -234,6 +253,15 @@ static int p8_call(CELESTE_P8_CALLBACK_TYPE calltype, ...)
   int ret = 0;
 
   switch (calltype) {
+    case CELESTE_P8_MUSIC: {
+      int n = INT_ARG();
+      int fadems = INT_ARG();
+      int mask = INT_ARG();
+      music_mask = mask;
+      play_pattern(n);
+      break;
+    }
+
     case CELESTE_P8_SPR: {
       int tile = INT_ARG();
       int x = INT_ARG() - camera_x;
@@ -401,6 +429,9 @@ static int p8_call(CELESTE_P8_CALLBACK_TYPE calltype, ...)
 void p8_init()
 {
   camera_x = camera_y = 0;
+  music_pattern = 0xff;
+  music_mask = 0;
+  last_sfx_ch = 3;
   for (int i = 0; i < 4; i++) channels[i].snd_id = 0xff;
 
   Celeste_P8_set_call_func(p8_call);
