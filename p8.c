@@ -97,7 +97,6 @@ static struct {
   unsigned snd_id;
   unsigned note_id;
   unsigned samples;
-  float phase;
 } channels[4];
 
 static unsigned music_pattern;
@@ -140,7 +139,6 @@ static inline void play_pattern(int n, int fadems)
         channels[ch].snd_id = snd_id;
         channels[ch].note_id = 0;
         channels[ch].samples = 0;
-        channels[ch].phase = 0;
         int spd = (p8_sfx[snd_id].lpstart < p8_sfx[snd_id].lpend) ?
           p8_sfx[snd_id].spd : 0xffff;
         if (max_spd < spd) {
@@ -212,11 +210,52 @@ static const osc_t osc[8] = {
 
 #define lerp(a, b, r) ((a) + ((b) - (a)) * (r))
 
+static uint32_t total_samples;
+#define NOTE_FADE_SAMPLES 64
+
+static inline float osc_note(const p8_snd *snd, unsigned note_id, int samples)
+{
+  const p8_note *note = &snd->notes[note_id];
+  if (note->vol == 0) return 0;
+
+#define rate ((float)samples / (183 * snd->spd))
+  float f = freq(note->pitch);
+  if (samples > 0) {
+    if (note->eff == 1) {
+      // Effect 1: Slide
+      // Caveat: does not handle loops
+      unsigned last_pitch = (note_id == 0 ? 24 : (note - 1)->pitch);
+      f = freq(lerp((float)last_pitch, (float)note->pitch, rate));
+    } else if (note->eff == 2) {
+      // Effect 2: Vibrato
+      // LFO period is 16 ticks
+    } else if (note->eff == 3) {
+      // Effect 3: Drop
+      f = freq(note->pitch * (1 - rate));
+    } else if (note->eff == 6) {
+      // Effect 6: Arp fast
+      // LFO period is 4 ticks
+    }
+  }
+  // Oscillator
+  float x = (float)total_samples / 22050 * f;
+  float value = osc[note->wform](x);
+  value *= (float)note->vol / 7;
+  if (samples > 0) {
+    // Effects 4, 5: Fade in/out
+    if (note->eff == 4) value *= rate;
+    if (note->eff == 5) value *= (1 - rate);
+  }
+  return value;
+#undef rate
+}
+
 // 22050 Hz 16-bit mono
 void p8_audio(unsigned block_samples, int16_t *pcm)
 {
   for (unsigned i = 0; i < block_samples; i++) pcm[i] = 0;
   unsigned music_end = 0;
+  uint32_t total_samples_start = total_samples;
   for (int c = 0; c < 8; c++) {
     // 0...3: music; 4...7: non-music
     // Since it is necessary to find the end of the music
@@ -232,46 +271,28 @@ void p8_audio(unsigned block_samples, int16_t *pcm)
     if (snd_id == 0xff) continue;
     unsigned note_id = channels[ch].note_id;
     unsigned samples = channels[ch].samples;
-    float phase = channels[ch].phase;
     const p8_snd *snd = &p8_sfx[snd_id];
     for (unsigned i = 0; i < block_samples; i++) {
-      const p8_note *note = &snd->notes[note_id];
-      float f0 = freq(note->pitch);
-      #define rate ((float)samples / (183 * snd->spd))
-
-      if (note->vol != 0) {
-        float f = f0;
-        if (note->eff == 1) {
-          // Effect 1: Slide
-          // Caveat: does not handle loops
-          unsigned last_pitch = (note_id == 0 ? 24 : (note - 1)->pitch);
-          f = freq(lerp((float)last_pitch, (float)note->pitch, rate));
-        } else if (note->eff == 2) {
-          // Effect 2: Vibrato
-        } else if (note->eff == 3) {
-          // Effect 3: Drop
-          f = freq(note->pitch * (1 - rate));
-        }
-        // Oscillator
-        float x = phase + (float)samples / 22050 * f;
-        float value = osc[note->wform](x);
-        value *= (float)note->vol / 7;
-        // Effects 4, 5: Fade in/out
-        if (note->eff == 4) value *= rate;
-        if (note->eff == 5) value *= (1 - rate);
-        // Is music fading?
-        if (c < 4 && music_fade_dur > 0) {
-          float r = fminf(1.0f, (float)(music_fade_cur + i) / music_fade_dur);
-          if (music_is_fade_out) r = 1 - r;
-          value *= r;
-        }
-        pcm[i] += (int16_t)roundf(value * 8191.5f);
+      total_samples = total_samples_start + i;
+      float value = osc_note(snd, note_id, samples);
+      // Is near the end of the note?
+      if (samples + NOTE_FADE_SAMPLES >= 183 * snd->spd) {
+        float value_next = (note_id == 31 ? 0 :
+          osc_note(snd, note_id + 1, (int)samples - 183 * snd->spd));
+        value = lerp(value_next, value,
+          (float)(183 * snd->spd - samples) / NOTE_FADE_SAMPLES);
       }
+      // Is music fading?
+      if (c < 4 && music_fade_dur > 0) {
+        float r = fminf(1.0f, (float)(music_fade_cur + i) / music_fade_dur);
+        if (music_is_fade_out) r = 1 - r;
+        value *= r;
+      }
+      pcm[i] += (int16_t)roundf(value * 8191.5f);
 
       // Update
       samples++;
       if (samples == 183 * snd->spd) {
-        phase += (float)samples / 22050 * f0;
         samples = 0;
         note_id++;
         bool pattern_end = false;
@@ -292,7 +313,6 @@ void p8_audio(unsigned block_samples, int16_t *pcm)
     channels[ch].snd_id = snd_id;
     channels[ch].note_id = note_id;
     channels[ch].samples = samples;
-    channels[ch].phase = phase;
   }
 
   if (music_fade_dur > 0 &&
@@ -321,6 +341,8 @@ void p8_audio(unsigned block_samples, int16_t *pcm)
     // Re-generate audio
     p8_audio(block_samples - music_end, pcm + music_end);
   }
+
+  total_samples = total_samples_start + block_samples;
 }
 
 // Interface
@@ -378,7 +400,6 @@ static int p8_call(CELESTE_P8_CALLBACK_TYPE calltype, ...)
       channels[last_sfx_ch].snd_id = id;
       channels[last_sfx_ch].note_id = 0;
       channels[last_sfx_ch].samples = 0;
-      channels[last_sfx_ch].phase = 0;
       break;
     }
 
@@ -517,6 +538,7 @@ void p8_init()
   last_sfx_ch = 3;
   music_fade_dur = 0;
   for (int i = 0; i < 4; i++) channels[i].snd_id = 0xff;
+  total_samples = NOTE_FADE_SAMPLES;
 
   Celeste_P8_set_call_func(p8_call);
   Celeste_P8_set_rndseed(20210115);

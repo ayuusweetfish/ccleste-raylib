@@ -1,4 +1,5 @@
 LD = $(CC)
+RM = rm -f
 
 CFLAGS += -Iraylib/src -g
 
@@ -16,4 +17,7 @@ celeste.o: ccleste/celeste.c
 raylib.target:
 	$(MAKE) -C raylib/src
 
-.PHONY: raylib.target
+clean:
+	$(RM) main $(OBJS)
+
+.PHONY: raylib.target clean
