@@ -187,11 +187,14 @@ static float osc_organ(float x) {
   float z = fmodf(x * 2, 2);
   return (fabsf(y-1)-0.5 + (fabsf(z-1)-0.5)/2-0.1) * 0.7;
 }
+static float noise_state[8][3];
+static unsigned noise_ch;
 static float osc_noise(float x) {
   const float tscale = 0.11288053831187f;
-  static float lastx = 0;
-  static float smp0 = 0, smp1 = 0;
-  float scale = (x - lastx) / tscale;
+#define lastx noise_state[noise_ch][0]
+#define smp0  noise_state[noise_ch][1]
+#define smp1  noise_state[noise_ch][2]
+  float scale = fminf(fabsf(x - lastx), 0.01) / tscale;
   smp0 = smp1;
   smp1 = (smp0 + scale * my_rand()) / (1 + scale);
   lastx = x;
@@ -274,9 +277,11 @@ void p8_audio(unsigned block_samples, int16_t *pcm)
     const p8_snd *snd = &p8_sfx[snd_id];
     for (unsigned i = 0; i < block_samples; i++) {
       total_samples = total_samples_start + i;
+      noise_ch = ch + (note_id % 2 == 0 ? 0 : 4);
       float value = osc_note(snd, note_id, samples);
       // Is near the end of the note?
       if (samples + NOTE_FADE_SAMPLES >= 183 * snd->spd) {
+        noise_ch ^= 4;
         float value_next = (note_id == 31 ? 0 :
           osc_note(snd, note_id + 1, (int)samples - 183 * snd->spd));
         value = lerp(value_next, value,
@@ -339,6 +344,7 @@ void p8_audio(unsigned block_samples, int16_t *pcm)
       play_pattern(music_pattern + 1, 0);
     }
     // Re-generate audio
+    total_samples = total_samples_start + music_end;
     p8_audio(block_samples - music_end, pcm + music_end);
   }
 
@@ -539,6 +545,7 @@ void p8_init()
   music_fade_dur = 0;
   for (int i = 0; i < 4; i++) channels[i].snd_id = 0xff;
   total_samples = NOTE_FADE_SAMPLES;
+  memset(noise_state, 0, sizeof noise_state);
 
   Celeste_P8_set_call_func(p8_call);
   Celeste_P8_set_rndseed(20210115);
